@@ -64,32 +64,35 @@ Simulate the first step 10,000 times and visualize the distribution of treatment
 
 ```{r}
 # Simulate this 10,000 times (monte carlo simulation - see R Refresher for a hint)
+sims=10000
 
-sims=100
-#create randomized treatment/control columns for each simulation
-rand_treat = data.frame(replicate(sims,sample(0:1,nrow(ypsps),rep=TRUE,prob=c(0.5,0.5))))%>%
-            set_names(paste("sim", 1:sims, sep = ""))
-rand_treat$parent_Vote = ypsps$parent_Vote
-
-#create empty lists to contain the sum of students whose parents voted by treatment and control for each simulation
-treatment = c()
-control = c()
-
-#Run the simulation and store values in lists
-for (i in 1:sims){
-  
-    dat=rand_treat%>% select(paste0("sim",i),"parent_Vote")
-    colnames(dat)=c("sim","parent_Vote")
-    tot = dat%>% group_by(sim)%>%
-      summarise(sum_parent_Vote=sum(parent_Vote),.groups = 'drop')
-
-    treatment[i]=as.integer(tot[2,2])
-    control[i]=as.integer(tot[1,2])
+#This function creates a randomized assignment to treatment with a 50/50 probability
+#The outcome is a vector which counts the total number of people by treatment and covarriate value
+rand_fun = function(){
+  rand_vec =  sample(0:1,nrow(ypsps),rep=TRUE,prob=c(0.5,0.5))
+  dat = ypsps%>% select(parent_Vote)%>%mutate(sim=rand_vec)
+  result = data_frame(rand_sum = c(
+  nrow(dat%>%filter(sim==0 & parent_Vote==0))
+  ,nrow(dat%>%filter(sim==0 & parent_Vote==1))
+  ,nrow(dat%>%filter(sim==1 & parent_Vote==0))
+  ,nrow(dat%>%filter(sim==1 & parent_Vote==1))
+  ))
+  return(result)
 }
 
-#calculate the mean number of people whose parents voted by randomized treatment/control
-mean(treatment)
-mean(control)
+#We replicate the process for the desired amount of simulations and calculate the mean
+sim_result = rowMeans(bind_cols(replicate(sims,rand_fun())), na.rm = FALSE, dims = 1)
+
+#We store the mean values across all simulations in a table
+sim_result_t = data_frame("Treatment"=c("Control","Control","Treatment","Treatment")
+                          , "Parent_vote"=c("No","Yes","No","Yes")
+                        ,"Mean"=c(sim_result[1],sim_result[2],sim_result[3],sim_result[4]))
+
+#visualize
+ggplot(data=sim_result_t, aes(x=Parent_vote, y=Mean, fill=Treatment)) +
+geom_bar(stat="identity", position=position_dodge())+
+  geom_text(aes(label=Mean), vjust=1.6, color="white",
+            position = position_dodge(0.9), size=3.5)
 ```
 
 ## Questions
