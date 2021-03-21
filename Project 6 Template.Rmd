@@ -1,6 +1,8 @@
 ---
 title: 'Project 6: Randomization and Matching'
-output: pdf_document
+output:
+  html_document:
+    df_print: paged
 ---
 
 # Introduction
@@ -25,31 +27,69 @@ Otherwise, we also have covariates measured for survey responses to various ques
 # Feel free to load other libraries as you wish
 library(tidyverse)
 library(MatchIt)
+library(ggplot2)
 
+set.seed(8)
 # Load ypsps data
-ypsps <- read_csv('data/ypsps.csv')
+ypsps <- read.csv('data/ypsps.csv')
 head(ypsps)
 ```
 
 # Randomization
 
-Matching is usually used in observational studies to to approximate random assignment to treatment. But could it be useful even in randomized studies? To explore the question do the following:
+Matching is usually used in observational studies to to approximate random assignment to treatment. But could it be useful even in randomized studies? To explore the question do the following:  
 
-\begin{enumerate}
-    \item Generate a vector that randomly assigns each unit to either treatment or control
-    \item Choose a baseline covariate (for either the student or parent). A binary covariate is probably best for this exercise.
-    \item Visualize the distribution of the covariate by treatment/control condition. Are treatment and control balanced on this covariate?
-    \item Simulate the first 3 steps 10,000 times and visualize the distribution of treatment/control balance across the simulations.
-\end{enumerate}
+1. Generate a vector that randomly assigns each unit to either treatment or control item Choose a baseline covariate (for either the student or parent). A binary covariate is probably best for this exercise.  
+
+2. Visualize the distribution of the covariate by treatment/control condition. Are treatment and control balanced on this covariate?
+
 
 ```{r}
-# Generate a vector that randomly assigns each unit to treatment/control
-
-# Choose a baseline covariate (use dplyr for this)
+#We explore the distribution of students by those whose parents voted 
+dat_sub = ypsps %>% select (college,parent_Vote) %>% 
+  mutate(random_treat = sample(0:1,nrow(ypsps), replace=T,prob=c(0.5,0.5)))%>%
+  mutate (college=if_else(college==1,"Treatment","Control") )%>%
+  mutate (random_treat=if_else(random_treat==1,"Random Treatment","Random Control") )
 
 # Visualize the distribution by treatment/control (ggplot)
+ggplot(dat_sub, aes(x=parent_Vote, fill=college)) +
+    geom_histogram(binwidth=.5, position="dodge")
 
+# Visualize the distribution by random treatment/control (ggplot)
+ggplot(dat_sub, aes(x=parent_Vote, fill=random_treat)) +
+    geom_histogram(binwidth=.5, position="dodge")
+```
+
+Simulate the first step 10,000 times and visualize the distribution of treatment/control balance across the simulations.
+
+```{r}
 # Simulate this 10,000 times (monte carlo simulation - see R Refresher for a hint)
+
+sims=100
+#create randomized treatment/control columns for each simulation
+rand_treat = data.frame(replicate(sims,sample(0:1,nrow(ypsps),rep=TRUE,prob=c(0.5,0.5))))%>%
+            set_names(paste("sim", 1:sims, sep = ""))
+rand_treat$parent_Vote = ypsps$parent_Vote
+
+#create empty lists to contain the sum of students whose parents voted by treatment and control for each simulation
+treatment = c()
+control = c()
+
+#Run the simulation and store values in lists
+for (i in 1:sims){
+  
+    dat=rand_treat%>% select(paste0("sim",i),"parent_Vote")
+    colnames(dat)=c("sim","parent_Vote")
+    tot = dat%>% group_by(sim)%>%
+      summarise(sum_parent_Vote=sum(parent_Vote),.groups = 'drop')
+
+    treatment[i]=as.integer(tot[2,2])
+    control[i]=as.integer(tot[1,2])
+}
+
+#calculate the mean number of people whose parents voted by randomized treatment/control
+mean(treatment)
+mean(control)
 ```
 
 ## Questions
