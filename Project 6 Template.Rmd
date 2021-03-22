@@ -53,11 +53,15 @@ dat_sub = ypsps %>% select (college,parent_Vote) %>%
 
 # Visualize the distribution by treatment/control (ggplot)
 ggplot(dat_sub, aes(x=parent_Vote, fill=college)) +
-    geom_histogram(binwidth=.5, position="dodge")
+    geom_histogram(binwidth=.5, position="dodge")+
+  ggtitle("Distribution of parent_Vote for treatment and control groups") +
+  xlab("Students by parent's choice to vote") 
 
 # Visualize the distribution by random treatment/control (ggplot)
 ggplot(dat_sub, aes(x=parent_Vote, fill=random_treat)) +
-    geom_histogram(binwidth=.5, position="dodge")
+    geom_histogram(binwidth=.5, position="dodge")+
+  ggtitle("Distribution of parent_Vote for randomized treatment and control groups") +
+  xlab("Students by parent's choice to vote") 
 ```
 
 Simulate the first step 10,000 times and visualize the distribution of treatment/control balance across the simulations.
@@ -92,15 +96,25 @@ sim_result_t = data_frame("Treatment"=c("Control","Control","Treatment","Treatme
 ggplot(data=sim_result_t, aes(x=Parent_vote, y=Mean, fill=Treatment)) +
 geom_bar(stat="identity", position=position_dodge())+
   geom_text(aes(label=Mean), vjust=1.6, color="white",
-            position = position_dodge(0.9), size=3.5)
+            position = position_dodge(0.9), size=3.5)+
+  ggtitle("Mean distribution of parent_Vote for randomized treatment and control groups") +
+  xlab("Students by parent's choice to vote")+ ylab(paste0("Mean count for ",sims," simulations"))
 ```
 
 ## Questions
 \begin{enumerate}
-    \item \textbf{What do you see across your simulations? Why does independence of treatment assignment and baseline covariates not guarantee balance of treatment assignment and baseline covariates?}
+    \item \textbf{What do you see across your simulations? 
+    Why does independence of treatment assignment and baseline covariates 
+    not guarantee balance of treatment assignment and baseline covariates?}
 \end{enumerate}
 
-\textbf{Your Answer}: 
+\textbf{Your Answer} first draft: We see that the covariate we chose to explore - parent_vote - isn't balanced for treatment and control. 
+In the real expriment, the control group is underrepresented in the group of students whose parents voted. 
+In randomized assignment, we would expect treatment and control to have similar distributions covarriates.
+This is a good example for how the independence of treatment assignment and baseline covariates does not
+guarantee balance of treatment assignment and baseline covariates. 
+This imbalance raises concerns to whether this covariate and parhaps other covariates are confounders.
+
 
 # Propensity Score Matching
 
@@ -109,10 +123,45 @@ Select covariates that you think best represent the "true" model predicting whet
 
 ```{r}
 # Select covariates that represent the "true" model for selection, fit model
+ypsps_selected = ypsps %>% select(college,parent_Vote,parent_CivicOrg,parent_OwnHome
+                                  ,parent_Rally,parent_PolClub,parent_Money
+                                  ,student_AdultTalk,student_FrTalk
+                                  ,student_Newspaper,student_Magazine
+                                  ,student_Radio,student_FamTalk
+                                  )
 
 # Plot the balance for the top 10 covariates
 
+#We write a function that selects the treatment variable (college) and one covariate at a time
+#and calculates their mean and a chi-squered test of difference.
+balance_fun = function(dat,n){
+  dat_sub = dat%>% select(college,colnames(dat)[n])
+  result = data_frame(covariate = as.character(colnames(dat)[n])
+                      ,control = round(mean((dat_sub%>%filter(college==0)%>% select(-college))[,1]),3)
+                     ,treatment = round(mean((dat_sub%>%filter(college==1)%>% select(-college))[,1]),3)
+                     ,chisq_test = round(chisq.test(table(ypsps_selected$college,
+                                                    ypsps_selected[,colnames(ypsps_selected)[n]]))$p.value,5)
+                      )
+  return(result)
+}
+
+datalist=list()
+for (i in 2:ncol(ypsps_selected)){
+ datalist[[i]] =balance_fun(ypsps_selected,i)
+}
+balance = bind_rows(datalist)
+
+#Top ten variables by balance on covariates
+head(arrange(balance,desc(chisq_test)), n = 10)
+```
+
+Report the overall balance and the proportion of covariates that meet the balance threshold
+```{r}
 # Report the overall balance and the proportion of covariates that meet the balance threshold
+balance
+
+#proportion of covariates that meet the threshold
+round(nrow(balance%>%filter(chisq_test>0.1))/nrow(balance)*100,2)
 ```
 
 ## Simulations
@@ -129,18 +178,57 @@ Henderson/Chatfield argue that an improperly specified propensity score model ca
 \textbf{Note: There are lots of post-treatment covariates in this dataset (about 50!)! You need to be careful not to include these in the pre-treatment balancing. Many of you are probably used to selecting or dropping columns manually, or positionally. However, you may not always have a convenient arrangement of columns, nor is it fun to type out 50 different column names. Instead see if you can use dplyr 1.0.0 functions to programatically drop post-treatment variables (\href{https://www.tidyverse.org/blog/2020/03/dplyr-1-0-0-select-rename-relocate/}{here} is a useful tutorial).}
 
 ```{r}
-# Remove post-treatment covariates
+# Remove post-treatment and outcome covariates
+ypsps_pre_treat = ypsps%>%select(!matches("1973")& !matches("1982") 
+                                 & -c("student_ppnscal","college","student_vote"
+                                     ,"student_meeting","student_button"
+                                     ,"student_money","student_communicate"
+                                     ,"student_demonstrate","student_community"
+                                     ,"student_other","interviewid"))
 
-# Randomly select features
+
+# Randomly select 30 features
+ypsps_pre_treat_selected = ypsps_pre_treat[, sample(ncol(ypsps_pre_treat), #randomize the selection of columns
+                                                    sample(15:50, 1, replace=TRUE) #randomize the number of columns
+                                                    )]
 
 # Simulate random selection of features 10k+ times
 
+
 # Fit p-score models and save ATTs, proportion of balanced covariates, and mean percent balance improvement
+
+# model_ps <- glm(college ~ parent_Vote + parent_CivicOrg + parent_OwnHome
+#                 ,family = binomial()
+#                 ,data = ypsps_selected)
+# 
+# dat <- ypsps_selected %>% mutate(prop_score = predict(model_ps))
+# 
+# #subset dataset
+# df_a0 <- dat %>% filter(college == 0)
+# df_a1 <- dat %>% filter(college == 1)
+# 
+# dist.prop.score <- function(x,y) { abs(x-y) }
+# 
+# calculate.dist <- function(x, y, dist.method, xnames = df_a1$ID, ynames = df_a0$ID) {
+#   dists <- apply(y, 1, function(j) {apply(x, 1, function(i) {dist.method(i,j)})})
+#   rownames(dists) <- xnames
+#   colnames(dists) <- ynames
+#   return(dists)
+# }
+# 
+# dists_ps <- calculate.dist(as.matrix(df_a1[, "prop_score"]),
+#                            as.matrix(df_a0[, "prop_score"]),
+#                            dist.prop.score)
+# as.data.frame(dists_ps)
+
 
 # Plot ATT v. proportion
 
 # 10 random covariate balance plots (hint try gridExtra)
 # Note: ggplot objects are finnicky so ask for help if you're struggling to automatically create them; consider using functions!
+
+
+
 ```
 
 ## Questions
