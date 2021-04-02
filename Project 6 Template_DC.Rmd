@@ -130,8 +130,7 @@ ypsps_selected = ypsps %>% dplyr::select(college,student_Gen,student_FPlans,
                                          parent_Employ,parent_EducHH, 
                                          student_Race,parent_EducW, 
                                          parent_HHInc,parent_OwnHome, 
-                                         parent_FInc,parent_Race,
-                                         parent_Knowledge
+                                         parent_FInc,parent_Knowledge
                                          )
 
 
@@ -171,10 +170,11 @@ round(nrow(balance%>%filter(chisq_test>0.1))/nrow(balance)*100,2)
 ```
 
 We selected the following covariates to represent the "true" model for predicting whether a student chooses to attend college:
-student_Gen, student_GPA, student_NextSch, parent_Employ, parent_EducHH, parent_EducW
-parent_HHInc, parent_OwnHome. 
+*Student covariates: student_GPA,student_NextSch, student_Race 
+*Parent Covariates: parent_Employ,parent_EducHH, parent_EducW, parent_HHInc,parent_FInc,parent_OwnHome,parent_Knowledge
 
-We see that none of our covariates are balanced, thus the proportion of covariates meeting the balance threshold is equal to 0.
+
+We see that the proportion of covariates meeting the balance threshold is about 8%.
 
 
 ## Simulations
@@ -213,7 +213,7 @@ outcome <- ypsps_pre_treat_w_outcome %>%
   #                                                  )]
 
 # number of sims
-n = 100
+n = 5000
 # randomly select columns
 col.list <- replicate(n, sample(2:ncol(ypsps_pre_treat),size=sample(2:ncol(ypsps_pre_treat),size = 1,replace = FALSE), replace = TRUE), simplify = FALSE)
 # remove duplicates from the column lists because we don't want to have the same variable twice in the equation
@@ -303,10 +303,10 @@ for (i in random_models) {
     \item \textbf{How many simulations resulted in models with a higher proportion of balanced covariates? Do you have any concerns about this?}
 ```{r}
 dt %>%
-  subset(p_balanced_cov>0.15) %>%
+  subset(p_balanced_cov>0.08) %>%
   nrow()
 ```
-    \item \textbf{Your Answer}: A total of 99 out of 100 simulations [this will change when we run a larger number of sims] resulted in models with a higher proportion of balanced covariates. However, as we see in the plot, there appears to be a greater amount of variation in the Average Treatment Effect on the Treated, which suggests that our method for matching is imprecise.
+    \item \textbf{Your Answer}: A total of 4971 out of 5000 simulations resulted in models with a higher proportion of balanced covariates. As we see in the plot, the proportion of balanced covariates cluster between 0.25 and .50. However, we do have several outliers in both directions suggesting that our method for matching may be imprecise.
 
     \item \textbf{Analyze the distribution of the ATTs. Do you have any concerns about this distribution?}
 ```{r}
@@ -318,7 +318,7 @@ ggplot(data = dt, aes(x=ATT)) +
   xlab("Average Treatment Effect on the Treated (ATT)") +
   ylab("Count")
 ```
-    \item \textbf{Your Answer:} As we mentioned above, in the plot showing the distribution of the Average Treatment Effect on the Treated, we identify outlier values that skew the distribution to the right. Again, we do have concerns about the precision of our model, given the variation in treatment effect. 
+    \item \textbf{Your Answer:} We see in the plot that the distrubtion of the Average Treatment Effect on the Treated is close to being normally distrubed and slightly skewed to the right. We do have some concerns about the precision of our model, given the slight variation in treatment effect. 
     \item \textbf{Do your 10 randomly chosen covariate balance plots produce similar numbers on the same covariates? Is it a concern if they do not?}
     \item \textbf{Your Answer:} It is difficult to say whether our balance plots produce similar numbers as they also vary significantly given the set of covariates used for each model. All of which suggests that the treatment effect we aim to measure appears to be highly sensitive to the covariates we choose for matching. 
 \end{enumerate}
@@ -332,7 +332,7 @@ Henderson/Chatfield propose using genetic matching to learn the best weights for
 ```{r}
 
 # number of sims
-n = 100
+n = 5000
 
 # randomly select columns
 col.list <- replicate(n, sample(2:ncol(ypsps_pre_treat),size=sample(2:ncol(ypsps_pre_treat),size = 1,replace = FALSE), replace = TRUE), simplify = FALSE)
@@ -442,10 +442,10 @@ ggplot(data = dt_alt, aes(x=ATT)) +
     \item \textbf{Does your alternative matching method have more runs with higher proportions of balanced covariates?}
 ```{r}
 dt_alt %>%
-  subset(p_balanced_cov>0.15) %>%
+  subset(p_balanced_cov>0.08) %>%
   nrow()
 ```
-    \item \textbf{Your Answer:} No. [But maybe this changes when we run a larger number of simulations].
+    \item \textbf{Your Answer:} Yes, but only slightly. We improve the number by four values: a total of 4975 out of 5000 simulations resulted in models with a higher proportion of balanced covariates. 
     \item \textbf{Use a visualization to examine the change in the distribution of the percent improvement in balance in propensity score matching vs. the distribution of the percent improvement in balance in your new method. Which did better? Analyze the results in 1-2 sentences.}
 ```{r}
 #combining results into single df
@@ -460,7 +460,7 @@ ggplot(data = dt_all, aes(x = prop_score_mean_improvement, y = alt_method_mean_i
   xlab("Mean Improvement in the Propensity Score Model") +
   ylab("Mean Improvement in the Alternative Model")
 ```
-    \item \textbf{Your Answer:} The alternative model, which uses Mahalanobis exact matching, has less variation in mean improvement and significantly more positive cases of improvement. We can see that the propensity score models actually worsen balance.
+    \item \textbf{Your Answer:} The alternative model, which uses Mahalanobis exact matching, appears to have slightly less variation in mean improvement and a higher proportion of balanced covariates. With the alternate model we also see that the ATT is no longer centered around 1.0--it becomes smaller--and the skewness of the distribution of ATT becomes more pronounced. While the alternate model appears to show a higher percent improvement in balancing covariates, both models are fairly similar and the variation we see indicates sensitivity to the covariates we choose to match on. 
 \end{enumerate}
 
 \textbf{Optional:} Looking ahead to the discussion questions, you may choose to model the propensity score using an algorithm other than logistic regression and perform these simulations again, if you wish to explore the second discussion question further.
@@ -472,5 +472,5 @@ ggplot(data = dt_all, aes(x = prop_score_mean_improvement, y = alt_method_mean_i
     \item Why might it be a good idea to do matching even if we have a randomized or as-if-random design?
     \item \textbf{Your Answer:} If the covariates are unbalanced in the treatment and control groups of our randomized design, we may decide to use matching methods to improve the balance of the covariates and the precision of the model. With propensity score matching, we use multiple covariates to predict propensity scores that represent the probability that a unit will receive the treatment. However, we should proceed with caution. When we use matching techniques, we do not account for the unobserved confounding variables that may bias our analyses. Additionally, we must assume that when treatment and control cases have been matched, the covariates in each group will be balanced and have similar distributions. However, as we’ve seen in this project, matching may help to improve but it does not completely balance the covariates.
     \item The standard way of estimating the propensity score is using a logistic regression to estimate probability of treatment. Given what we know about the curse of dimensionality, do you think there might be advantages to using other machine learning algorithms (decision trees, bagging/boosting forests, ensembles, etc.) to estimate propensity scores instead?
-    \item \textbf{Your Answer:} In the future, we might consider using classification models such as random forests to estimate propensity scores. Random forest algorithms work well within high-dimensional feature spaces and do not require statistical assumptions (e.g. it is a non-statistical classification method). Similar to the random model simulations in our project, a random forest is an ensemble method that “grows” individual decision trees, with each tree identifying a class prediction given the data. Random forests also allow for variation among individual decision trees, however working as an ensemble, the random forest is able to improve the classification task. This would be especially useful given the data and variation in the random models we generated for this project.
-\end{enumerate}
+    \item \textbf{Your Answer:} In the future, we might consider using classification models such as random forests to estimate propensity scores. Random forest algorithms work well within high-dimensional feature spaces and do not require parametric statistical assumptions (e.g. it is a non-statistical classification method). Similar to the random model simulations in our project, a random forest is an ensemble method that “grows” individual decision trees, with each tree identifying a class prediction given the data. Random forests also allow for variation among individual decision trees, however working as an ensemble, the random forest is able to improve the classification task. This would be especially useful given the data and variation in the random models we generated for this project.
+\end{enumerate} 
